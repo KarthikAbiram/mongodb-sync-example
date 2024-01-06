@@ -1,0 +1,80 @@
+# Command to Run:
+# docker-compose -p mongo-sync -f docker-compose-sync.yml up -d
+
+# This would launch 3 instances of mongodb and 3 mapped instances of mongo express. 
+# Mongo express can be used to visualize the data in the mongodb.
+# Mongo express can be accessed in browser via port exposed. Eg: http://localhost:8201/
+
+# When you add an item via one of the mongo express instances, it would showup in other two instances, 
+# proving the synchronization across the mongo databases.
+
+# The command under healthcheck of mongo-s1 is for setting up the replica set. This needs to be executed only once 
+# and under only one instance. The command rs.status() will result in error when the replica set is not configured, 
+# using which we can execute this command to be executed only once.
+
+# Reference: https://medium.com/workleap/the-only-local-mongodb-replica-set-with-docker-compose-guide-youll-ever-need-2f0b74dd8384
+
+version: "3.8"
+
+services:
+  mongo-s1:
+    image: mongo:6.0.2
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - 27027:27017
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'host.docker.internal:27027',priority:1},{_id:1,host:'host.docker.internal:27028',priority:0.5},{_id:2,host:'host.docker.internal:27029',priority:0.5}]}) }" | mongosh --port 27017 --quiet
+      interval: 5s
+      timeout: 30s
+      start_period: 0s
+      retries: 30
+    volumes:
+      - ./.volume-sync/mongo-s1:/data/db
+      
+  mongo-s2:
+    image: mongo:6.0.2
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
+    ports:
+      - 27028:27018
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.volume-sync/mongo-s2:/data/db  
+
+  mongo-s3:
+    image: mongo:6.0.2
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27019"]
+    ports:
+      - 27029:27019
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.volume-sync/mongo-s3:/data/db
+
+  mongo-express-s1:
+    image: mongo-express
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-s1
+      - ME_CONFIG_MONGODB_PORT=27017
+    ports:
+      - 8201:8081
+
+  mongo-express-s2:
+    image: mongo-express
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-s2
+      - ME_CONFIG_MONGODB_PORT=27018
+    ports:
+      - 8202:8081
+
+  mongo-express-s3:
+    image: mongo-express
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-s3
+      - ME_CONFIG_MONGODB_PORT=27019
+    ports:
+      - 8203:8081
+    depends_on:
+      - mongo-s3

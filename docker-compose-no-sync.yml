@@ -1,0 +1,76 @@
+# Command to Run:
+# docker-compose -p mongo-no-sync -f docker-compose-no-sync.yml up -d
+
+# This would launch 3 instances of mongodb and 3 mapped instances of mongo express. 
+# Mongo express can be used to visualize the data in the mongodb.
+# Mongo express can be accessed in browser via port exposed. Eg: http://localhost:8101/
+# There is no synchornization and each mongodb instance is separate
+# When you add an item via one of the mongo express instances, it would not sync in other two instances.
+
+version: "3.8"
+
+services:
+  mongo-ns1:
+    image: mongo:6.0.2
+    command: ["--port", "27017"]
+    ports:
+      - 27017:27017
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.volume-no-sync/mongo-ns1:/data/db
+
+  mongo-ns2:
+    image: mongo:6.0.2
+    command: ["--port", "27018"]
+    ports:
+      - 27018:27018
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.volume-no-sync/mongo-ns2:/data/db
+      
+
+  mongo-ns3:
+    image: mongo:6.0.2
+    command: ["--port", "27019"]
+    ports:
+      - 27019:27019
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./.volume-no-sync/mongo-ns3:/data/db
+
+  mongo-express-ns1:
+    image: mongo-express:1.0.2
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-ns1
+      - ME_CONFIG_MONGODB_PORT=27017
+    ports:
+      - 8101:8081
+    depends_on:
+      - mongo-ns1
+
+  mongo-express-ns2:
+    image: mongo-express:1.0.2
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-ns2
+      - ME_CONFIG_MONGODB_PORT=27018
+    ports:
+      - 8102:8081
+    depends_on:
+      - mongo-ns2
+
+  mongo-express-ns3:
+    image: mongo-express:1.0.2
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo-ns3
+      - ME_CONFIG_MONGODB_PORT=27019
+    ports:
+      - 8103:8081
+    depends_on:
+      - mongo-ns3
+
+networks:
+  mongo_net:
+    driver: bridge
